@@ -20,7 +20,7 @@ class DevicePair:
         right = self.right.pipeline.wait_for_frames()
         return left, right
 
-    def start(self, width, height, fps):
+    def start(self, width=1280, height=720, fps=15):
         self.left.start_stream(width, height, fps)
         self.right.start_stream(width, height, fps)
 
