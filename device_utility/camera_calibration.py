@@ -195,8 +195,8 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2):
         # https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#gadc5bcb05cb21cf1e50963df26986d7c9
         # this is rather slow, maybe try multiprocessing or multithreading
         # cv.CALIB_CB_MARKER leads to much worse results
-        ret_l, corners_left = cv.findChessboardCornersSB(image_left, (5, 7), flags=0)
-        ret_r, corners_right = cv.findChessboardCornersSB(image_right, (5, 7), flags=0)
+        ret_l, corners_left = cv.findChessboardCornersSB(image_left, (5, 7), flags=cv.CALIB_CB_NORMALIZE_IMAGE)
+        ret_r, corners_right = cv.findChessboardCornersSB(image_right, (5, 7), flags=cv.CALIB_CB_NORMALIZE_IMAGE)
 
         # if both images had valid chessboard patterns found, refine them and append them to the output array
         if ret_l and ret_r and not cooldown:
