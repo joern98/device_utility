@@ -153,8 +153,8 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
     set_sensor_option(depth_sensor_right, rs.option.emitter_enabled, False)
 
     # set exposure to below 33ms to allow for 30fps streaming
-    set_sensor_option(depth_sensor_left, rs.option.exposure, 5000)
-    set_sensor_option(depth_sensor_right, rs.option.exposure, 5000)
+    set_sensor_option(depth_sensor_left, rs.option.exposure, 8500)
+    set_sensor_option(depth_sensor_right, rs.option.exposure, 8500)
 
     # Initialize array to hold the 3D-object coordinates of the inner chessboard corners
     # 8x8 chessboard has 7x7 inner corners
@@ -208,38 +208,38 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
         # https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#gadc5bcb05cb21cf1e50963df26986d7c9
         # this is rather slow, maybe try multiprocessing or multithreading
         # cv.CALIB_CB_MARKER leads to much worse results
-        # TODO, try deferring chessboard finding, just gather frames to keep framerate
-
-        ret_l, corners_left = cv.findChessboardCornersSB(image_left, pattern_dimensions, flags=cv.CALIB_CB_NORMALIZE_IMAGE)
-        ret_r, corners_right = cv.findChessboardCornersSB(image_right, pattern_dimensions, flags=cv.CALIB_CB_NORMALIZE_IMAGE)
-        cv.drawChessboardCorners(image_left, pattern_dimensions, corners_left, ret_l)
-        cv.drawChessboardCorners(image_right, pattern_dimensions, corners_right, ret_r)
 
         # if both images had valid chessboard patterns found, refine them and append them to the output array
-        # enforce timestamp difference below 20ms
-        if d_ts < 20.00 and ret_l and ret_r and not cooldown:
-            object_points.append(objp)  # corresponding object points
+        # enforce timestamp difference below specified value in ms
+        if not cooldown and d_ts < 30.00 and cv.checkChessboard(image_left, pattern_dimensions):
+            ret_l, corners_left = cv.findChessboardCornersSB(image_left, pattern_dimensions,
+                                                             flags=cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY)
+            ret_r, corners_right = cv.findChessboardCornersSB(image_right, pattern_dimensions,
+                                                              flags=cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY)
+            cv.drawChessboardCorners(image_left, pattern_dimensions, corners_left, ret_l)
+            cv.drawChessboardCorners(image_right, pattern_dimensions, corners_right, ret_r)
+            if ret_l and ret_r:
+                object_points.append(objp)  # corresponding object points
 
-            # corners_subpixel_left = cv.cornerSubPix(image_left, corners_left, (5, 5), (-1, -1), TERM_CRITERIA)
-            # corners_subpixel_right = cv.cornerSubPix(image_right, corners_right, (5, 5), (-1, -1), TERM_CRITERIA)
+                # corners_subpixel_left = cv.cornerSubPix(image_left, corners_left, (5, 5), (-1, -1), TERM_CRITERIA)
+                # corners_subpixel_right = cv.cornerSubPix(image_right, corners_right, (5, 5), (-1, -1), TERM_CRITERIA)
 
-            # image_points_left.append(corners_subpixel_left)
-            # image_points_right.append(corners_subpixel_right)
+                # image_points_left.append(corners_subpixel_left)
+                # image_points_right.append(corners_subpixel_right)
 
-            image_points_left.append(corners_left)
-            image_points_right.append(corners_right)
+                image_points_left.append(corners_left)
+                image_points_right.append(corners_right)
 
-            print(f"{np.size(object_points, 0)} of {NUM_PATTERNS_REQUIRED}")
+                print(f"{np.size(object_points, 0)} of {NUM_PATTERNS_REQUIRED}")
 
-            # draw corners on images
-            # cv.drawChessboardCorners(image_left, (7, 7), corners_subpixel_left, ret_l)
-            # cv.drawChessboardCorners(image_right, (7, 7), corners_subpixel_right, ret_r)
+                # draw corners on images
+                # cv.drawChessboardCorners(image_left, (7, 7), corners_subpixel_left, ret_l)
+                # cv.drawChessboardCorners(image_right, (7, 7), corners_subpixel_right, ret_r)
 
-            # set cooldown period
-            cooldown = True
-            threading.Timer(2, reset_cooldown).start()
+                # set cooldown period
+                cooldown = True
+                threading.Timer(2, reset_cooldown).start()
 
-        # TODO refactor to use existing window infrastructure
         cv.imshow(WINDOW_IMAGE_LEFT, image_left)
         cv.imshow(WINDOW_IMAGE_RIGHT, image_right)
 
