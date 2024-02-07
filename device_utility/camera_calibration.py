@@ -85,14 +85,22 @@ def run_camera_calibration(device_pair: DevicePair) -> Tuple[CalibrationResult, 
     right_is_index = 1
     # inner cameras
     camera_parameters = collect_camera_parameters(device_pair, left_ir_index, right_is_index)
+    print(camera_parameters)
 
-    object_points, image_points_left, image_points_right = find_chessboard_corners(device_pair, left_ir_index, right_is_index)
+    object_points, image_points_left, image_points_right = find_chessboard_corners(device_pair, left_ir_index,
+                                                                                   right_is_index,
+                                                                                   pattern_dimensions=(7, 10),
+                                                                                   pattern_size=(0.024, 0.024))
 
     calibration_result = stereo_calibrate(device_pair, camera_parameters, object_points, image_points_left,
                                           image_points_right)
 
     # transform calibration
     calibration_result.R_14 = transform_inner_to_outer_stereo(camera_parameters, calibration_result)
+
+    # print(f"Deviation from Ground truth:\n"
+    #       f"    T: {np.asarray(camera_parameters.left_stereo_extrinsics.translation).reshape(3, 1) - calibration_result.T}\n"
+    #       f"    R: {np.asarray(camera_parameters.left_stereo_extrinsics.rotation).reshape(3, 3) - calibration_result.R}")
 
     rectification_result = stereo_rectify(device_pair, camera_parameters.image_size, calibration_result)
 
@@ -135,7 +143,9 @@ def collect_camera_parameters(device_pair: DevicePair, left_ir_index=1, right_ir
 
 
 # https://docs.opencv.org/4.x/da/d0d/tutorial_camera_calibration_pattern.html
-def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2):
+# pattern dimensions/size (rows, columns)
+def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
+                            pattern_dimensions=(5, 7), pattern_size=(0.034, 0.034)):
     # turn of ir pattern emitters
     depth_sensor_left: rs.depth_sensor = device_pair.left.device.first_depth_sensor()
     depth_sensor_right: rs.depth_sensor = device_pair.right.device.first_depth_sensor()
@@ -143,18 +153,19 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2):
     set_sensor_option(depth_sensor_right, rs.option.emitter_enabled, False)
 
     # set exposure to below 33ms to allow for 30fps streaming
-    set_sensor_option(depth_sensor_left, rs.option.exposure, 30000)
-    set_sensor_option(depth_sensor_right, rs.option.exposure, 30000)
+    set_sensor_option(depth_sensor_left, rs.option.exposure, 5000)
+    set_sensor_option(depth_sensor_right, rs.option.exposure, 5000)
 
     # Initialize array to hold the 3D-object coordinates of the inner chessboard corners
     # 8x8 chessboard has 7x7 inner corners
     # objp = np.zeros((7 * 7, 3), np.float32)
-    objp = np.zeros((5 * 7, 3), np.float32)
+    objp = np.zeros((pattern_dimensions[0] * pattern_dimensions[1], 3), np.float32)
 
     # create coordinate pairs for the corners and write them to the array, leaving the z-coordinate at 0
     # chessboard pattern has a size of 24mm -> 0.024m
     # objp[:, :2] = np.mgrid[0:7 * 0.024:0.024, 0:7 * 0.024:0.024].T.reshape(-1, 2)
-    objp[:, :2] = np.mgrid[0:5 * 0.034:0.034, 0:7 * 0.034:0.034].T.reshape(-1, 2)  # pattern size 34mm, 5x7
+    objp[:, :2] = np.mgrid[0:pattern_dimensions[0] * pattern_size[0]:pattern_size[0],
+                  0:pattern_dimensions[1] * pattern_size[1]:pattern_size[1]].T.reshape(-1, 2)  # pattern size 34mm, 5x7
 
     object_points = []
     image_points_left = []
@@ -173,9 +184,9 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2):
 
         # check frame timestamps
         # TODO monitor using matplotlib. don't print()
-        # ts_l = frame_left.get_timestamp()
-        # ts_r = frame_right.get_timestamp()
-        # d_ts = abs(ts_l - ts_r)
+        ts_l = frame_left.get_timestamp()
+        ts_r = frame_right.get_timestamp()
+        d_ts = abs(ts_l - ts_r)
         # print(f"d ts: {d_ts}")
 
         # outer cameras
@@ -183,8 +194,10 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2):
         # ir_right = frame_right.get_infrared_frame(2)
 
         # inner cameras
+        # TODO testing calibration by calibrating a single camera and comparing to ground truth
         ir_left = frame_left.get_infrared_frame(left_ir)
         ir_right = frame_right.get_infrared_frame(right_ir)
+        # ir_right = frame_left.get_infrared_frame(right_ir)
         image_left = np.array(ir_left.get_data())
         image_right = np.array(ir_right.get_data())
 
@@ -195,11 +208,16 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2):
         # https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#gadc5bcb05cb21cf1e50963df26986d7c9
         # this is rather slow, maybe try multiprocessing or multithreading
         # cv.CALIB_CB_MARKER leads to much worse results
-        ret_l, corners_left = cv.findChessboardCornersSB(image_left, (5, 7), flags=cv.CALIB_CB_NORMALIZE_IMAGE)
-        ret_r, corners_right = cv.findChessboardCornersSB(image_right, (5, 7), flags=cv.CALIB_CB_NORMALIZE_IMAGE)
+        # TODO, try deferring chessboard finding, just gather frames to keep framerate
+
+        ret_l, corners_left = cv.findChessboardCornersSB(image_left, pattern_dimensions, flags=cv.CALIB_CB_NORMALIZE_IMAGE)
+        ret_r, corners_right = cv.findChessboardCornersSB(image_right, pattern_dimensions, flags=cv.CALIB_CB_NORMALIZE_IMAGE)
+        cv.drawChessboardCorners(image_left, pattern_dimensions, corners_left, ret_l)
+        cv.drawChessboardCorners(image_right, pattern_dimensions, corners_right, ret_r)
 
         # if both images had valid chessboard patterns found, refine them and append them to the output array
-        if ret_l and ret_r and not cooldown:
+        # enforce timestamp difference below 20ms
+        if d_ts < 20.00 and ret_l and ret_r and not cooldown:
             object_points.append(objp)  # corresponding object points
 
             # corners_subpixel_left = cv.cornerSubPix(image_left, corners_left, (5, 5), (-1, -1), TERM_CRITERIA)
@@ -216,8 +234,6 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2):
             # draw corners on images
             # cv.drawChessboardCorners(image_left, (7, 7), corners_subpixel_left, ret_l)
             # cv.drawChessboardCorners(image_right, (7, 7), corners_subpixel_right, ret_r)
-            cv.drawChessboardCorners(image_left, (5, 7), corners_left, ret_l)
-            cv.drawChessboardCorners(image_right, (5, 7), corners_right, ret_r)
 
             # set cooldown period
             cooldown = True
