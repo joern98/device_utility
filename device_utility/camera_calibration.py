@@ -153,8 +153,8 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
     set_sensor_option(depth_sensor_right, rs.option.emitter_enabled, False)
 
     # set exposure to below 33ms to allow for 30fps streaming
-    set_sensor_option(depth_sensor_left, rs.option.exposure, 8500)
-    set_sensor_option(depth_sensor_right, rs.option.exposure, 8500)
+    set_sensor_option(depth_sensor_left, rs.option.exposure, 30000)
+    set_sensor_option(depth_sensor_right, rs.option.exposure, 30000)
 
     # Initialize array to hold the 3D-object coordinates of the inner chessboard corners
     # 8x8 chessboard has 7x7 inner corners
@@ -213,9 +213,9 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
         # enforce timestamp difference below specified value in ms
         if not cooldown and d_ts < 30.00 and cv.checkChessboard(image_left, pattern_dimensions):
             ret_l, corners_left = cv.findChessboardCornersSB(image_left, pattern_dimensions,
-                                                             flags=cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY)
+                                                             flags=cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY | cv.CALIB_CB_EXHAUSTIVE)
             ret_r, corners_right = cv.findChessboardCornersSB(image_right, pattern_dimensions,
-                                                              flags=cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY)
+                                                              flags=cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY | cv.CALIB_CB_EXHAUSTIVE)
             cv.drawChessboardCorners(image_left, pattern_dimensions, corners_left, ret_l)
             cv.drawChessboardCorners(image_right, pattern_dimensions, corners_right, ret_r)
             if ret_l and ret_r:
