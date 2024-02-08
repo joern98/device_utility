@@ -26,6 +26,10 @@ class DeviceManager:
                 connected_devices[serial] = d
         return connected_devices
 
+    @staticmethod
+    def device_count(context: rs.context):
+        return len(DeviceManager.enumerate_devices(context))
+
     # return the serial numbers for left and right as tuple (left, right)
     @staticmethod
     def serial_selection():
