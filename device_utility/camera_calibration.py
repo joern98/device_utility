@@ -13,7 +13,7 @@ import pyrealsense2 as rs
 
 from device_utility.DeviceManager import DeviceManager
 from device_utility.DevicePair import DevicePair
-from device_utility.utils import set_sensor_option, get_stereo_extrinsic
+from device_utility.utils import set_sensor_option, get_stereo_extrinsic, get_sensor_option
 
 NUM_PATTERNS_REQUIRED = 10
 # https://docs.opencv.org/4.x/d9/d5d/classcv_1_1TermCriteria.html, (TYPE, iterations, epsilon)
@@ -76,6 +76,10 @@ class RectificationResult:
 def run_camera_calibration(device_pair: DevicePair) -> Tuple[CalibrationResult, RectificationResult]:
     cv.namedWindow(WINDOW_IMAGE_RIGHT)
     cv.namedWindow(WINDOW_IMAGE_LEFT)
+    # exposure unit is microseconds -> [0, 166000] 166ms
+    cv.createTrackbar("exposure", WINDOW_IMAGE_LEFT, 0, 166000, lambda v: change_exposure_time(v, device_pair))
+    cv.setTrackbarPos("exposure", WINDOW_IMAGE_LEFT,
+                      int(get_sensor_option(device_pair.left.device.first_depth_sensor(), rs.option.exposure)))
 
     # we only need IR streams
     # try lower resolution to improve performance
@@ -141,6 +145,11 @@ def collect_camera_parameters(device_pair: DevicePair, left_ir_index=1, right_ir
                                      image_size=(left_intrinsic.width, left_intrinsic.height))
     return camera_params
 
+def change_exposure_time(value, device_pair: DevicePair):
+    depth_sensor_left: rs.depth_sensor = device_pair.left.device.first_depth_sensor()
+    depth_sensor_right: rs.depth_sensor = device_pair.right.device.first_depth_sensor()
+    set_sensor_option(depth_sensor_left, rs.option.exposure, value)
+    set_sensor_option(depth_sensor_right, rs.option.exposure, value)
 
 # https://docs.opencv.org/4.x/da/d0d/tutorial_camera_calibration_pattern.html
 # pattern dimensions/size (rows, columns)
@@ -211,7 +220,8 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
 
         # if both images had valid chessboard patterns found, refine them and append them to the output array
         # enforce timestamp difference below specified value in ms
-        if not cooldown and d_ts < 30.00 and cv.checkChessboard(image_left, pattern_dimensions):
+        check_chessboard = cv.checkChessboard(image_left, pattern_dimensions)
+        if not cooldown and d_ts < 30.00 and check_chessboard:
             ret_l, corners_left = cv.findChessboardCornersSB(image_left, pattern_dimensions,
                                                              flags=cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY | cv.CALIB_CB_EXHAUSTIVE)
             ret_r, corners_right = cv.findChessboardCornersSB(image_right, pattern_dimensions,
