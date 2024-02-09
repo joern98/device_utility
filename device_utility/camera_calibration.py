@@ -15,7 +15,7 @@ from device_utility.DeviceManager import DeviceManager
 from device_utility.DevicePair import DevicePair
 from device_utility.utils import set_sensor_option, get_stereo_extrinsic, get_sensor_option
 
-NUM_PATTERNS_REQUIRED = 10
+NUM_PATTERNS_REQUIRED = 6
 # https://docs.opencv.org/4.x/d9/d5d/classcv_1_1TermCriteria.html, (TYPE, iterations, epsilon)
 TERM_CRITERIA = (cv.TERM_CRITERIA_COUNT + cv.TERM_CRITERIA_EPS, 30, 0.001)
 WINDOW_IMAGE_LEFT = "left ir"
@@ -100,7 +100,7 @@ def run_camera_calibration(device_pair: DevicePair) -> Tuple[CalibrationResult, 
                                           image_points_right)
 
     # transform calibration
-    calibration_result.R_14 = transform_inner_to_outer_stereo(camera_parameters, calibration_result)
+    calibration_result.R_14 = transpose_inner_to_outer_stereo(camera_parameters, calibration_result)
 
     # print(f"Deviation from Ground truth:\n"
     #       f"    T: {np.asarray(camera_parameters.left_stereo_extrinsics.translation).reshape(3, 1) - calibration_result.T}\n"
@@ -223,9 +223,9 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
         check_chessboard = cv.checkChessboard(image_left, pattern_dimensions)
         if not cooldown and d_ts < 30.00 and check_chessboard:
             ret_l, corners_left = cv.findChessboardCornersSB(image_left, pattern_dimensions,
-                                                             flags=cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY | cv.CALIB_CB_EXHAUSTIVE)
+                                                             flags=cv.CALIB_CB_ACCURACY | cv.CALIB_CB_EXHAUSTIVE)
             ret_r, corners_right = cv.findChessboardCornersSB(image_right, pattern_dimensions,
-                                                              flags=cv.CALIB_CB_NORMALIZE_IMAGE | cv.CALIB_CB_ACCURACY | cv.CALIB_CB_EXHAUSTIVE)
+                                                              flags=cv.CALIB_CB_ACCURACY | cv.CALIB_CB_EXHAUSTIVE)
             cv.drawChessboardCorners(image_left, pattern_dimensions, corners_left, ret_l)
             cv.drawChessboardCorners(image_right, pattern_dimensions, corners_right, ret_r)
             if ret_l and ret_r:
@@ -309,11 +309,12 @@ def stereo_calibrate(device_pair: DevicePair, camera_params: CameraParameters, o
     # set R_14 if its outer pair
     calibration_result = CalibrationResult(*result, R_14=None, image_size=camera_params.image_size)
     print(f"stereo calibration rms: {calibration_result.rms}")
+    print(f"stereo calibration T: {calibration_result.T}")
     # print(f"stereo calibration per view errors: \n{calibration_result.per_view_errors}")
     return calibration_result
 
 
-def transform_inner_to_outer_stereo(camera_params: CameraParameters, calib: CalibrationResult):
+def transpose_inner_to_outer_stereo(camera_params: CameraParameters, calib: CalibrationResult):
     """
     Return the 4x4 transformation matrix R_14=(R|t) in homogenous coordinates
     :param camera_params:
@@ -356,9 +357,9 @@ def stereo_rectify(device_pair: DevicePair, image_size: Tuple[int, int], calib: 
 
     # cv.stereoRectify(	cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, imageSize, R, T[, R1[, R2[, P1[, P2[, Q[, flags[, alpha[, newImageSize]]]]]]]]	)
     # -> 	R1, R2, P1, P2, Q, validPixROI1, validPixROI2
-    # All the matrices must have the same data type in function 'cvRodrigues2' -> convert to np.float32
-    # camera params are the same as calib result
+    # All the matrices must have the same data type in function 'cvRodrigues2' -> convert to float64
     # https://answers.opencv.org/question/3441/strange-stereorectify-error-with-rotation-matrix/ -> double precision
+    # camera params are the same as calib result
 
     R1, R2, P1, P2, Q, roi1, roi2 = cv.stereoRectify(cameraMatrix1=calib.camera_matrix_left,
                                                      distCoeffs1=calib.coeffs_left,
@@ -376,13 +377,13 @@ def stereo_rectify(device_pair: DevicePair, image_size: Tuple[int, int], calib: 
                                                         R=R1,
                                                         newCameraMatrix=P1,
                                                         size=image_size,
-                                                        m1type=cv.CV_16SC2)
+                                                        m1type=cv.CV_32FC1)
     right_map_1, right_map_2 = cv.initUndistortRectifyMap(cameraMatrix=calib.camera_matrix_right,
                                                           distCoeffs=calib.coeffs_right,
-                                                          R=R1,
-                                                          newCameraMatrix=P1,
+                                                          R=R2,
+                                                          newCameraMatrix=P2,
                                                           size=image_size,
-                                                          m1type=cv.CV_16SC2)
+                                                          m1type=cv.CV_32FC1)
 
     rectification_result = RectificationResult(left_map_1,
                                                left_map_2,
