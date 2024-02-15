@@ -93,8 +93,8 @@ def run_camera_calibration(device_pair: DevicePair) -> Tuple[CalibrationResult, 
 
     object_points, image_points_left, image_points_right = find_chessboard_corners(device_pair, left_ir_index,
                                                                                    right_is_index,
-                                                                                   pattern_dimensions=(7, 10),
-                                                                                   pattern_size=(0.024, 0.024))
+                                                                                   pattern_dimensions=(6, 9),
+                                                                                   pattern_size=(24, 24))
 
     calibration_result = stereo_calibrate(device_pair, camera_parameters, object_points, image_points_left,
                                           image_points_right)
@@ -152,9 +152,9 @@ def change_exposure_time(value, device_pair: DevicePair):
     set_sensor_option(depth_sensor_right, rs.option.exposure, value)
 
 # https://docs.opencv.org/4.x/da/d0d/tutorial_camera_calibration_pattern.html
-# pattern dimensions/size (rows, columns)
+# pattern dimensions/size (rows, columns), size in mm (integer)
 def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
-                            pattern_dimensions=(5, 7), pattern_size=(0.034, 0.034)):
+                            pattern_dimensions=(5, 7), pattern_size=(34, 34)):
     # turn of ir pattern emitters
     depth_sensor_left: rs.depth_sensor = device_pair.left.device.first_depth_sensor()
     depth_sensor_right: rs.depth_sensor = device_pair.right.device.first_depth_sensor()
@@ -173,8 +173,11 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
     # create coordinate pairs for the corners and write them to the array, leaving the z-coordinate at 0
     # chessboard pattern has a size of 24mm -> 0.024m
     # objp[:, :2] = np.mgrid[0:7 * 0.024:0.024, 0:7 * 0.024:0.024].T.reshape(-1, 2)
+    # pay attention to floating point arithmetic
     objp[:, :2] = np.mgrid[0:pattern_dimensions[0] * pattern_size[0]:pattern_size[0],
                   0:pattern_dimensions[1] * pattern_size[1]:pattern_size[1]].T.reshape(-1, 2)  # pattern size 34mm, 5x7
+
+    objp /= 1000  # convert mm to m here to avoid issues with floating point arithmetic in np.mgrid
 
     object_points = []
     image_points_left = []
