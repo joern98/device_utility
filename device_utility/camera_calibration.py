@@ -422,19 +422,19 @@ class CalibrationResultEncoder(JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def write_calibration_to_file(calibration_result: CalibrationResult):
-    filename = f"Calibration_{datetime.now().strftime('%y%m%d_%H%M%S')}"
-    with open(filename + ".json", "x") as f:
+def write_calibration_to_file(calibration_result: CalibrationResult,
+                              file_basename=f"Calibration_{datetime.now().strftime('%y%m%d_%H%M%S')}"):
+    with open(file_basename + ".json", "x") as f:
         json.dump(calibration_result, f, cls=CalibrationResultEncoder, indent=2)
-        print(f"Written human-readable calibration data to file: {filename + '.json'}")
+        print(f"Written human-readable calibration data to file: {file_basename + '.json'}")
 
-    with open(filename + ".npy", "xb") as f:
+    with open(file_basename + ".npy", "xb") as f:
         # order matters, save all fields of Calibration result
         for field in fields(CalibrationResult):
             attr = getattr(calibration_result, field.name)
             # if R_14 is none, save it as 0, since we cannot save None directly without using pickle
             np.save(f, attr if attr is not None else [0])
-        print(f"Written binary calibration data to file: {filename + '.npy'}")
+        print(f"Written binary calibration data to file: {file_basename + '.npy'}")
 
 
 def load_calibration_from_file(filename: str) -> CalibrationResult:
