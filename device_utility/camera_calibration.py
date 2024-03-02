@@ -93,7 +93,7 @@ def run_camera_calibration(device_pair: DevicePair) -> Tuple[CalibrationResult, 
 
     object_points, image_points_left, image_points_right = find_chessboard_corners(device_pair, left_ir_index,
                                                                                    right_is_index,
-                                                                                   pattern_dimensions=(6, 9),
+                                                                                   pattern_dimensions=(7, 10),
                                                                                    pattern_size=(24, 24))
 
     calibration_result = stereo_calibrate(device_pair, camera_parameters, object_points, image_points_left,
@@ -401,7 +401,7 @@ class CalibrationResultEncoder(JSONEncoder):
 
     def __serialize_calibration_result(self, obj: CalibrationResult):
         o = {
-            "rms": obj.rms,
+            "rms": obj.rms if isinstance(obj.rms, float) else float(obj.rms),
             "camera_matrix_left": obj.camera_matrix_left.tolist(),
             "distortion_coefficients_left": obj.coeffs_left.ravel().tolist(),
             "camera_matrix_right": obj.camera_matrix_right.tolist(),
@@ -412,7 +412,7 @@ class CalibrationResultEncoder(JSONEncoder):
             "F": obj.F.tolist(),
             "per_view_errors": obj.per_view_errors.tolist(),
             "R_14": "Direct outer calibration, see R and T" if obj.R_14 is None else obj.R_14.tolist(),
-            "image_size": obj.image_size
+            "image_size": obj.image_size if isinstance(obj.image_size, Tuple) else obj.image_size.tolist()
         }
         return o
 
