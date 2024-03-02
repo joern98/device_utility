@@ -106,7 +106,7 @@ def run_camera_calibration(device_pair: DevicePair) -> Tuple[CalibrationResult, 
     #       f"    T: {np.asarray(camera_parameters.left_stereo_extrinsics.translation).reshape(3, 1) - calibration_result.T}\n"
     #       f"    R: {np.asarray(camera_parameters.left_stereo_extrinsics.rotation).reshape(3, 3) - calibration_result.R}")
 
-    rectification_result = stereo_rectify(device_pair, camera_parameters.image_size, calibration_result)
+    rectification_result = stereo_rectify(camera_parameters.image_size, calibration_result)
 
     device_pair.stop()
     cv.destroyAllWindows()
@@ -349,7 +349,7 @@ def transpose_inner_to_outer_stereo(camera_params: CameraParameters, calib: Cali
 
 # Reference: https://learnopencv.com/making-a-low-cost-stereo-camera-using-opencv/#stereo-rectification
 # https://docs.opencv.org/3.4/da/d54/group__imgproc__transform.html#gab75ef31ce5cdfb5c44b6da5f3b908ea4
-def stereo_rectify(device_pair: DevicePair, image_size: Tuple[int, int], calib: CalibrationResult):
+def stereo_rectify(image_size: Tuple[int, int], calib: CalibrationResult):
     # transform inner camera calibration to outer camera calibration transform
     if calib.R_14 is not None:
         R = calib.R_14[:3, :3].astype(np.float64)
