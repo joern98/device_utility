@@ -1,4 +1,5 @@
 # TODO sync exposure time between devices
+import os
 from typing import Dict, Any
 
 import pyrealsense2 as rs
@@ -60,3 +61,21 @@ class DeviceManager:
         left = Device(left_device, left_serial)
         right = Device(right_device, right_serial)
         return DevicePair(left, right)
+
+    def create_device_pair_interactive(self):
+        if self.device_count(self._context) != 2:
+            raise Exception(f"Unexpected number of devices (expected 2): {self.device_count(self._context)}")
+        try:
+            left_serial = os.environ.get("RS_LEFT_SERIAL")
+            right_serial = os.environ.get("RS_RIGHT_SERIAL")
+            if left_serial and right_serial is not None:
+                print(f"'RS_LEFT_SERIAL' and 'RS_RIGHT_SERIAL' environment variables are set:\n"
+                      f"Left Device: {left_serial}\nRight Device: {right_serial}")
+            else:
+                left_serial, right_serial = DeviceManager.serial_selection()
+        except Exception as e:
+            print("Serial selection failed: \n", e)
+            return
+
+        device_pair = self.create_device_pair(left_serial, right_serial)
+        return device_pair
