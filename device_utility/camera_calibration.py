@@ -1,3 +1,4 @@
+import argparse
 import json
 import sys
 import threading
@@ -73,7 +74,7 @@ class RectificationResult:
     ROI_right: Sequence[int]
 
 
-def run_camera_calibration(device_pair: DevicePair) -> Tuple[CalibrationResult, RectificationResult]:
+def run_camera_calibration(device_pair: DevicePair, rows=7, columns=10, size=24) -> Tuple[CalibrationResult, RectificationResult]:
     cv.namedWindow(WINDOW_IMAGE_RIGHT)
     cv.namedWindow(WINDOW_IMAGE_LEFT)
     # exposure unit is microseconds -> [0, 166000] 166ms
@@ -89,12 +90,11 @@ def run_camera_calibration(device_pair: DevicePair) -> Tuple[CalibrationResult, 
     right_is_index = 1
     # inner cameras
     camera_parameters = collect_camera_parameters(device_pair, left_ir_index, right_is_index)
-    print(camera_parameters)
 
     object_points, image_points_left, image_points_right = find_chessboard_corners(device_pair, left_ir_index,
                                                                                    right_is_index,
-                                                                                   pattern_dimensions=(7, 10),
-                                                                                   pattern_size=(24, 24))
+                                                                                   pattern_dimensions=(rows, columns),
+                                                                                   pattern_size=(size, size))
 
     calibration_result = stereo_calibrate(device_pair, camera_parameters, object_points, image_points_left,
                                           image_points_right)
@@ -113,7 +113,9 @@ def run_camera_calibration(device_pair: DevicePair) -> Tuple[CalibrationResult, 
 
     # TODO do not return calibration result as is, only return parameters for outer cameras
 
-    write_calibration_to_file(calibration_result)
+    save_prompt_result = input("save calibration? (y/n): ")
+    if save_prompt_result == 'y':
+        write_calibration_to_file(calibration_result)
 
     return calibration_result, rectification_result
 
@@ -164,6 +166,8 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
     # set exposure to below 33ms to allow for 30fps streaming
     set_sensor_option(depth_sensor_left, rs.option.exposure, 30000)
     set_sensor_option(depth_sensor_right, rs.option.exposure, 30000)
+
+    print(f"Find chessboard corners: {pattern_dimensions}, {pattern_size} mm")
 
     # Initialize array to hold the 3D-object coordinates of the inner chessboard corners
     # 8x8 chessboard has 7x7 inner corners
@@ -453,6 +457,11 @@ def load_calibration_from_file(filename: str) -> CalibrationResult:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(prog="Camera calibration")
+    parser.add_argument("--rows", help="number of rows in the chessboard pattern", default=7, type=int)
+    parser.add_argument("--columns", help="number of columns in the chessboard pattern", default=10, type=int)
+    parser.add_argument("--size", help="chessboard square size in mm", default=24, type=int)
+    args = parser.parse_args()
     ctx = rs.context()
     device_manager = DeviceManager(ctx)
     try:
@@ -468,7 +477,7 @@ if __name__ == '__main__':
     set_sensor_option(depth_sensor_left, rs.option.enable_auto_exposure, 0)
     set_sensor_option(depth_sensor_right, rs.option.enable_auto_exposure, 0)
 
-    calibration_result, rectification_result = run_camera_calibration(device_pair)
+    calibration_result, rectification_result = run_camera_calibration(device_pair, args.rows, args.columns, args.size)
 
     print(calibration_result)
 
