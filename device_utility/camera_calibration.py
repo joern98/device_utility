@@ -228,6 +228,7 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
         # if both images had valid chessboard patterns found, refine them and append them to the output array
         # enforce timestamp difference below specified value in ms
         check_chessboard = cv.checkChessboard(image_left, pattern_dimensions)
+        check_chessboard = True
         if not cooldown and d_ts < 30.00 and check_chessboard:
             ret_l, corners_left = cv.findChessboardCornersSB(image_left, pattern_dimensions,
                                                              flags=cv.CALIB_CB_ACCURACY | cv.CALIB_CB_EXHAUSTIVE)
@@ -273,9 +274,9 @@ def find_chessboard_corners(device_pair: DevicePair, left_ir=1, right_ir=2,
     set_sensor_option(depth_sensor_right, rs.option.emitter_enabled, True)
 
     # discard first match, it is usually bad due to motion blur
-    object_points.pop(0)
-    image_points_left.pop(0)
-    image_points_right.pop(0)
+    # object_points.pop(0)
+    # image_points_left.pop(0)
+    # image_points_right.pop(0)
 
     return object_points, image_points_left, image_points_right
 
